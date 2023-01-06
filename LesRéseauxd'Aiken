@@ -1,0 +1,16 @@
+<html>
+  <head>
+    <title>LesRéseauxdAiken</title>
+  </head>
+  <body>
+    <h1>LesRéseauxdAiken</h1>
+    <p>Bienvenue sur mon site web!</p>
+    <button onclick="showLinks()">CLIQUE</button>
+    <script>
+      function showLinks() {
+        window.open("https://www.youtube.com/channel/UClc7couXMkPM_uxgaBPjPCg");
+        window.open("https://www.instagram.com/jb_aiken/?hl=fr");
+      }
+    </script>
+  </body>
+</html>
