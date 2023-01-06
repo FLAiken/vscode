@@ -286,6 +286,7 @@ export class TestProfileService implements ITestProfileService {
 		for (const { profiles } of this.controllerProfiles.values()) {
 			for (const profile of profiles) {
 				allCapabilities |= allCapabilities & profile.group ? TestRunProfileBitset.HasNonDefaultProfile : profile.group;
+				allCapabilities |= profile.supportsContinuousRun ? TestRunProfileBitset.SupportsContinuousRun : 0;
 			}
 		}
 

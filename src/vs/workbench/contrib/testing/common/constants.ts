@@ -81,7 +81,7 @@ export const enum TestCommandId {
 	TestingSortByStatusAction = 'testing.sortByStatus',
 	TestingViewAsListAction = 'testing.viewAsList',
 	TestingViewAsTreeAction = 'testing.viewAsTree',
-	ToggleAutoRun = 'testing.toggleautoRun',
+	ToggleContinousRun = 'testing.toggleContinuousRun',
 	ToggleInlineTestOutput = 'testing.toggleInlineTestOutput',
 	UnhideTestAction = 'testing.unhideTest',
 	UnhideAllTestsAction = 'testing.unhideAllTests',

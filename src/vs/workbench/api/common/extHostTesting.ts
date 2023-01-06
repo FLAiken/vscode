@@ -15,6 +15,7 @@ import { MarshalledId } from 'vs/base/common/marshallingIds';
 import { deepFreeze } from 'vs/base/common/objects';
 import { isDefined } from 'vs/base/common/types';
 import { generateUuid } from 'vs/base/common/uuid';
+import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 import { ExtHostTestingShape, ILocationDto, MainContext, MainThreadTestingShape } from 'vs/workbench/api/common/extHost.protocol';
 import { ExtHostCommands } from 'vs/workbench/api/common/extHostCommands';
 import { ExtHostDocumentsAndEditors } from 'vs/workbench/api/common/extHostDocumentsAndEditors';
@@ -25,6 +26,7 @@ import { TestRunProfileKind, TestRunRequest } from 'vs/workbench/api/common/extH
 import { TestId, TestIdPathParts, TestPosition } from 'vs/workbench/contrib/testing/common/testId';
 import { InvalidTestItemError } from 'vs/workbench/contrib/testing/common/testItemCollection';
 import { AbstractIncrementalTestCollection, CoverageDetails, IFileCoverage, IncrementalChangeCollector, IncrementalTestCollectionItem, InternalTestItem, ISerializedTestResults, ITestItem, ITestItemContext, RunTestForControllerRequest, RunTestForControllerResult, TestResultState, TestRunProfileBitset, TestsDiff, TestsDiffOp } from 'vs/workbench/contrib/testing/common/testTypes';
+import { checkProposedApiEnabled } from 'vs/workbench/services/extensions/common/extensions';
 import type * as vscode from 'vscode';
 
 interface ControllerInfo {
@@ -69,7 +71,7 @@ export class ExtHostTesting implements ExtHostTestingShape {
 	/**
 	 * Implements vscode.test.registerTestProvider
 	 */
-	public createTestController(controllerId: string, label: string, refreshHandler?: (token: CancellationToken) => Thenable<void> | void): vscode.TestController {
+	public createTestController(extension: IExtensionDescription, controllerId: string, label: string, refreshHandler?: (token: CancellationToken) => Thenable<void> | void): vscode.TestController {
 		if (this.controllers.has(controllerId)) {
 			throw new Error(`Attempt to insert a duplicate controller with ID "${controllerId}"`);
 		}
@@ -101,7 +103,7 @@ export class ExtHostTesting implements ExtHostTestingShape {
 			get id() {
 				return controllerId;
 			},
-			createRunProfile: (label, group, runHandler, isDefault, tag?: vscode.TestTag | undefined) => {
+			createRunProfile: (label, group, runHandler, isDefault, tag?: vscode.TestTag | undefined, supportsContinuousRun?: boolean) => {
 				// Derive the profile ID from a hash so that the same profile will tend
 				// to have the same hashes, allowing re-run requests to work across reloads.
 				let profileId = hash(label);
@@ -109,7 +111,11 @@ export class ExtHostTesting implements ExtHostTestingShape {
 					profileId++;
 				}
 
-				return new TestRunProfileImpl(this.proxy, profiles, controllerId, profileId, label, group, runHandler, isDefault, tag);
+				if (supportsContinuousRun !== undefined) {
+					checkProposedApiEnabled(extension, 'testContinuousRun');
+				}
+
+				return new TestRunProfileImpl(this.proxy, profiles, controllerId, profileId, label, group, runHandler, isDefault, tag, supportsContinuousRun);
 			},
 			createTestItem(id, label, uri) {
 				return new TestItemImpl(controllerId, id, label, uri);
@@ -584,7 +590,7 @@ export class TestRunCoordinator {
 	/**
 	 * Implements the public `createTestRun` API.
 	 */
-	public createTestRun(controllerId: string, collection: ExtHostTestItemCollection, request: vscode.TestRunRequest, name: string | undefined, persist: boolean): vscode.TestRun {
+	public createTestRun(controllerId: string, collection: ExtHostTestItemCollection, request: vscode.TestRunRequest2, name: string | undefined, persist: boolean): vscode.TestRun {
 		const existing = this.tracked.get(request);
 		if (existing) {
 			return existing.createRun(name);
@@ -596,6 +602,7 @@ export class TestRunCoordinator {
 		const profile = tryGetProfileFromTestRunReq(request);
 		this.proxy.$startedExtensionTestRun({
 			controllerId,
+			continuous: !!request.continuous,
 			profile: profile && { group: profileGroupToBitset[profile.kind], id: profile.profileId },
 			exclude: request.exclude?.map(t => TestId.fromExtHostTestItem(t, collection.root.id).toString()) ?? [],
 			id: dto.id,
@@ -948,6 +955,17 @@ export class TestRunProfileImpl implements vscode.TestRunProfile {
 		}
 	}
 
+	public get supportsContinuousRun() {
+		return this._supportsContinuousRun;
+	}
+
+	public set supportsContinuousRun(supports: boolean) {
+		if (supports !== this._supportsContinuousRun) {
+			this._supportsContinuousRun = supports;
+			this.#proxy.$updateTestRunConfig(this.controllerId, this.profileId, { supportsContinuousRun: supports });
+		}
+	}
+
 	public get isDefault() {
 		return this._isDefault;
 	}
@@ -993,6 +1011,7 @@ export class TestRunProfileImpl implements vscode.TestRunProfile {
 		public runHandler: (request: vscode.TestRunRequest, token: vscode.CancellationToken) => Thenable<void> | void,
 		private _isDefault = false,
 		public _tag: vscode.TestTag | undefined = undefined,
+		private _supportsContinuousRun = false,
 	) {
 		this.#proxy = proxy;
 		this.#profiles = profiles;
@@ -1011,6 +1030,7 @@ export class TestRunProfileImpl implements vscode.TestRunProfile {
 			group: groupBitset,
 			isDefault: _isDefault,
 			hasConfigurationHandler: false,
+			supportsContinuousRun: _supportsContinuousRun,
 		});
 	}
 

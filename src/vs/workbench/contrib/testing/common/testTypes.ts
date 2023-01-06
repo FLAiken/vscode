@@ -26,6 +26,7 @@ export const enum TestRunProfileBitset {
 	Coverage = 1 << 3,
 	HasNonDefaultProfile = 1 << 4,
 	HasConfigurable = 1 << 5,
+	SupportsContinuousRun = 1 << 6,
 }
 
 /**
@@ -36,6 +37,8 @@ export const testRunProfileBitsetList = [
 	TestRunProfileBitset.Debug,
 	TestRunProfileBitset.Coverage,
 	TestRunProfileBitset.HasNonDefaultProfile,
+	TestRunProfileBitset.HasConfigurable,
+	TestRunProfileBitset.SupportsContinuousRun,
 ];
 
 /**
@@ -49,6 +52,7 @@ export interface ITestRunProfile {
 	isDefault: boolean;
 	tag: string | null;
 	hasConfigurationHandler: boolean;
+	supportsContinuousRun: boolean;
 }
 
 /**
@@ -63,7 +67,8 @@ export interface ResolvedTestRunRequest {
 		profileId: number;
 	}[];
 	exclude?: string[];
-	isAutoRun?: boolean;
+	/** Whether this is a continuous test run */
+	continuous?: boolean;
 	/** Whether this was trigged by a user action in UI. Default=true */
 	isUiTriggered?: boolean;
 }
@@ -78,17 +83,25 @@ export interface ExtensionRunTestsRequest {
 	controllerId: string;
 	profile?: { group: TestRunProfileBitset; id: number };
 	persist: boolean;
+	/** Whether this is a result of a continuous test run request */
+	continuous: boolean;
+}
+
+/**
+ * Request parameters a controller run handler.
+ */
+export interface ICallProfileRunHandler {
+	controllerId: string;
+	profileId: number;
+	excludeExtIds: string[];
+	testIds: string[];
 }
 
 /**
  * Request from the main thread to run tests for a single controller.
  */
-export interface RunTestForControllerRequest {
+export interface RunTestForControllerRequest extends ICallProfileRunHandler {
 	runId: string;
-	controllerId: string;
-	profileId: number;
-	excludeExtIds: string[];
-	testIds: string[];
 }
 
 export interface RunTestForControllerResult {
